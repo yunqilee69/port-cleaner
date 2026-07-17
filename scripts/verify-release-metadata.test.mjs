@@ -27,11 +27,11 @@ test("rejects a synchronized but unreleased 9.9.9 version", () => {
   metadata.packageJson.version = "9.9.9";
   metadata.tauriConfig.version = "9.9.9";
   metadata.cargoSource = metadata.cargoSource.replace(
-    /^version = "0\.1\.0"$/m,
+    /^version = "1\.0\.0"$/m,
     'version = "9.9.9"',
   );
 
-  assert.throws(() => verifyReleaseMetadata(metadata), /0\.1\.0/);
+  assert.throws(() => verifyReleaseMetadata(metadata), /1\.0\.0/);
 });
 
 test("rejects an extra script origin", () => {
