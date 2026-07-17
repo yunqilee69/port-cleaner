@@ -136,7 +136,7 @@ fn process_identity(pid: u32) -> Result<ProcessIdentity, AppError> {
     };
 
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if handle == 0 {
+    if handle.is_null() {
         return Err(map_process_api_error(pid, unsafe { GetLastError() }));
     }
 
