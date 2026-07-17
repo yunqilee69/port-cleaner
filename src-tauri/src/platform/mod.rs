@@ -1,9 +1,10 @@
+use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use tokio::process::Command;
 
-use crate::domain::{Access, ProcessDetails, Protocol};
+use crate::domain::{Access, BindingState, PortBinding, ProcessDetails, Protocol};
 use crate::error::AppError;
 
 pub mod linux;
@@ -304,6 +305,30 @@ pub(in crate::platform) fn binding_id(
     format!("{protocol}:{address}:{port}:{pid}")
 }
 
+pub(in crate::platform) fn listening_bindings(bindings: Vec<PortBinding>) -> Vec<PortBinding> {
+    let mut seen = HashSet::new();
+
+    bindings
+        .into_iter()
+        .filter_map(|mut binding| {
+            if binding.protocol == Protocol::Tcp && binding.state != BindingState::Listening {
+                return None;
+            }
+            binding.state = BindingState::Listening;
+            if let Some(pid) = binding.pid {
+                let protocol = match binding.protocol {
+                    Protocol::Tcp => "tcp",
+                    Protocol::Udp => "udp",
+                };
+                if !seen.insert((protocol, binding.port, pid)) {
+                    return None;
+                }
+            }
+            Some(binding)
+        })
+        .collect()
+}
+
 pub(in crate::platform) fn parse_error(source: &str, value: &str) -> AppError {
     AppError::Parse(format!("invalid {source} data: {value}"))
 }
@@ -332,6 +357,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use super::{format_stderr, select_trusted_executable_with, unix_locale};
+    use crate::domain::{Access, BindingState, PortBinding, Protocol};
     use crate::error::AppError;
 
     #[test]
@@ -372,5 +398,93 @@ mod tests {
     #[test]
     fn unix_commands_force_c_locale() {
         assert_eq!(unix_locale(), [("LC_ALL", "C"), ("LANG", "C")]);
+    }
+
+    #[test]
+    fn keeps_only_listening_bindings_and_marks_udp_as_listening() {
+        let bindings = vec![
+            PortBinding {
+                id: "tcp:127.0.0.1:3000:1".into(),
+                protocol: Protocol::Tcp,
+                local_address: "127.0.0.1".into(),
+                port: 3000,
+                state: BindingState::Listening,
+                pid: Some(1),
+                process_name: None,
+                user_name: None,
+                access: Access::Allowed,
+            },
+            PortBinding {
+                id: "tcp:[::]:3000:1".into(),
+                protocol: Protocol::Tcp,
+                local_address: "[::]".into(),
+                port: 3000,
+                state: BindingState::Listening,
+                pid: Some(1),
+                process_name: None,
+                user_name: None,
+                access: Access::Allowed,
+            },
+            PortBinding {
+                id: "tcp:127.0.0.1:3001:2".into(),
+                protocol: Protocol::Tcp,
+                local_address: "127.0.0.1".into(),
+                port: 3001,
+                state: BindingState::Connected,
+                pid: Some(2),
+                process_name: None,
+                user_name: None,
+                access: Access::Allowed,
+            },
+            PortBinding {
+                id: "udp:0.0.0.0:5353:3".into(),
+                protocol: Protocol::Udp,
+                local_address: "0.0.0.0".into(),
+                port: 5353,
+                state: BindingState::Unknown,
+                pid: Some(3),
+                process_name: None,
+                user_name: None,
+                access: Access::Allowed,
+            },
+        ];
+
+        let bindings = super::listening_bindings(bindings);
+
+        assert_eq!(bindings.len(), 2);
+        assert!(bindings
+            .iter()
+            .all(|binding| binding.state == BindingState::Listening));
+        assert!(bindings.iter().all(|binding| binding.port != 3001));
+    }
+
+    #[test]
+    fn preserves_restricted_bindings_without_a_pid_when_addresses_differ() {
+        let bindings = vec![
+            PortBinding {
+                id: "udp:0.0.0.0:5353:none".into(),
+                protocol: Protocol::Udp,
+                local_address: "0.0.0.0".into(),
+                port: 5353,
+                state: BindingState::Unknown,
+                pid: None,
+                process_name: None,
+                user_name: None,
+                access: Access::Restricted,
+            },
+            PortBinding {
+                id: "udp:[::]:5353:none".into(),
+                protocol: Protocol::Udp,
+                local_address: "[::]".into(),
+                port: 5353,
+                state: BindingState::Unknown,
+                pid: None,
+                process_name: None,
+                user_name: None,
+                access: Access::Restricted,
+            },
+        ];
+
+        assert_eq!(super::listening_bindings(bindings).len(), 2);
     }
 }

@@ -1,9 +1,9 @@
 use crate::domain::{BindingState, PortBinding, ProcessDetails, Protocol};
 use crate::error::AppError;
 use crate::platform::{
-    access_for, binding_id, command_failure_message, parse_error, parse_local_endpoint,
-    parse_optional_pid, parse_protocol, parse_ps_output, run_unix_command, run_unix_command_output,
-    trusted_executable, CommandOutput,
+    access_for, binding_id, command_failure_message, listening_bindings, parse_error,
+    parse_local_endpoint, parse_optional_pid, parse_protocol, parse_ps_output, run_unix_command,
+    run_unix_command_output, trusted_executable, CommandOutput,
 };
 use crate::process_service::{
     ProcessIdentity, ProcessReader, ProcessTerminator, ReaderFuture, TerminatorFuture,
@@ -18,7 +18,7 @@ impl ProcessReader for SystemProcessReader {
             let executable = trusted_executable("lsof", &lsof_candidates())?;
             let output =
                 run_unix_command(executable, &["-nP", "-iTCP", "-sTCP:LISTEN", "-iUDP"]).await?;
-            parse_lsof_output(&output)
+            Ok(listening_bindings(parse_lsof_output(&output)?))
         })
     }
 

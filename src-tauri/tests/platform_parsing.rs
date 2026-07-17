@@ -53,6 +53,41 @@ fn parses_windows_listening_tcp_row() {
 }
 
 #[test]
+fn parses_windows_tasklist_image_map_from_one_csv_scan() {
+    let images = windows::parse_tasklist_image_map(
+        r#""System Idle Process","0","Services","0","8 K"
+"node.exe","9124","Console","1","12,345 K"
+"quoted ""worker"".exe","4242","Console","1","9,876 K""#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        images.get(&0).map(String::as_str),
+        Some("System Idle Process")
+    );
+    assert_eq!(images.get(&9124).map(String::as_str), Some("node.exe"));
+    assert_eq!(
+        images.get(&4242).map(String::as_str),
+        Some("quoted \"worker\".exe")
+    );
+}
+
+#[test]
+fn enriches_windows_bindings_with_available_process_names() {
+    let mut bindings = windows::parse_netstat_output(
+        "TCP 127.0.0.1:3000 0.0.0.0:0 LISTENING 9124\nUDP 127.0.0.1:5353 *:* 4242",
+    )
+    .unwrap();
+    let images =
+        windows::parse_tasklist_image_map(r#""node.exe","9124","Console","1","12,345 K""#).unwrap();
+
+    windows::enrich_bindings_with_process_names(&mut bindings, &images);
+
+    assert_eq!(bindings[0].process_name.as_deref(), Some("node.exe"));
+    assert_eq!(bindings[1].process_name, None);
+}
+
+#[test]
 fn parsed_bindings_have_deterministic_ids() {
     let linux_bindings = linux::parse_ss_output(include_str!("fixtures/linux-ss.txt")).unwrap();
     let macos_bindings = macos::parse_lsof_output(include_str!("fixtures/macos-lsof.txt")).unwrap();

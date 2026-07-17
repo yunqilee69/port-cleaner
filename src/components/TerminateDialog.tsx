@@ -92,23 +92,23 @@ export function TerminateDialog({
     <div className="dialog-backdrop">
       <section aria-describedby="terminate-warning" aria-labelledby="terminate-title" aria-modal="true" className="terminate-dialog" ref={dialogRef} role="dialog" tabIndex={-1}>
         <div className="warning-emblem" aria-hidden="true">!</div>
-        <p className="eyebrow">Destructive operation</p>
-        <h2 id="terminate-title">Confirm termination</h2>
+        <p className="eyebrow">危险操作</p>
+        <h2 id="terminate-title">确认结束进程</h2>
         <p id="terminate-warning" className="dialog-warning">
-          Gracefully terminating this process may interrupt active connections and cause unsaved work to be lost.
+          正常结束该进程可能中断当前连接，并造成未保存的数据丢失。
         </p>
 
         <dl className="termination-facts">
-          <div><dt>Process</dt><dd>{binding.processName ?? "Unknown process"}</dd></div>
-          <div><dt>PID</dt><dd><code>{binding.pid ?? "Unavailable"}</code></dd></div>
-          <div><dt>Binding</dt><dd><span className={`protocol-badge protocol-badge--${binding.protocol}`}>{binding.protocol.toUpperCase()}</span> <code>{binding.localAddress}:{binding.port}</code></dd></div>
+          <div><dt>进程</dt><dd>{binding.processName ?? "未知进程"}</dd></div>
+          <div><dt>PID</dt><dd><code>{binding.pid ?? "不可用"}</code></dd></div>
+          <div><dt>监听端口</dt><dd><span className={`protocol-badge protocol-badge--${binding.protocol}`}>{binding.protocol.toUpperCase()}</span> <code>{binding.localAddress}:{binding.port}</code></dd></div>
         </dl>
 
-        <div className="signal-note"><span aria-hidden="true">i</span><p>Port Cleaner sends the operating system’s graceful termination signal only. No force kill is used.</p></div>
+        <div className="signal-note"><span aria-hidden="true">i</span><p>Port Cleaner 只发送操作系统的正常结束信号，不会强制结束进程。</p></div>
         {error && <div className="dialog-error" role="alert">{error}</div>}
         <div className="dialog-actions">
-          <button className="secondary-button" disabled={isSubmitting} onClick={onCancel} ref={cancelRef} type="button">Cancel</button>
-          <button className="danger-button" disabled={isSubmitting} onClick={onConfirm} type="button">{isSubmitting ? "Terminating process…" : "Terminate process"}</button>
+          <button className="secondary-button" disabled={isSubmitting} onClick={onCancel} ref={cancelRef} type="button">取消</button>
+          <button className="danger-button" disabled={isSubmitting} onClick={onConfirm} type="button">{isSubmitting ? "正在结束进程…" : "确认结束进程"}</button>
         </div>
       </section>
     </div>

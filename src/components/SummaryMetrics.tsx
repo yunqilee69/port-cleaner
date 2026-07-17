@@ -6,10 +6,10 @@ interface SummaryMetricsProps {
 
 export function SummaryMetrics({ bindings }: SummaryMetricsProps) {
   const metrics = [
-    { label: "Visible bindings", value: bindings.length, tone: "mint", symbol: "⌁" },
+    { label: "监听端口", value: bindings.length, tone: "mint", symbol: "⌁" },
     { label: "TCP", value: bindings.filter((item) => item.protocol === "tcp").length, tone: "amber", symbol: "T" },
     { label: "UDP", value: bindings.filter((item) => item.protocol === "udp").length, tone: "blue", symbol: "U" },
-    { label: "Restricted", value: bindings.filter((item) => item.access === "restricted").length, tone: "red", symbol: "!" },
+    { label: "受限", value: bindings.filter((item) => item.access === "restricted").length, tone: "red", symbol: "!" },
   ];
 
   return (

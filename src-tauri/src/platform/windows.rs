@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::domain::{Access, BindingState, PortBinding, ProcessDetails, Protocol};
 use crate::error::AppError;
 use crate::platform::{
-    access_for, binding_id, command_failure_message, parse_error, parse_local_endpoint,
-    parse_optional_pid, parse_protocol, run_command, run_command_output, validate_peer_endpoint,
-    CommandOutput,
+    access_for, binding_id, command_failure_message, listening_bindings, parse_error,
+    parse_local_endpoint, parse_optional_pid, parse_protocol, run_command, run_command_output,
+    validate_peer_endpoint, CommandOutput,
 };
 use crate::process_service::{
     ProcessIdentity, ProcessReader, ProcessTerminator, ReaderFuture, TerminatorFuture,
@@ -18,16 +19,21 @@ impl ProcessReader for SystemProcessReader {
     fn list_bindings(&self) -> ReaderFuture<'_, Vec<PortBinding>> {
         Box::pin(async {
             let system_directory = system_directory()?;
-            let executable = system_executable_from_directory(system_directory, "netstat.exe");
-            let tcp = run_command(&executable, &["-ano", "-p", "tcp"]).await?;
-            let udp = run_command(&executable, &["-ano", "-p", "udp"]).await?;
+            let netstat = system_executable_from_directory(system_directory.clone(), "netstat.exe");
+            let tasklist = system_executable_from_directory(system_directory, "tasklist.exe");
+            let tcp = run_command(&netstat, &["-ano", "-p", "tcp"]).await?;
+            let udp = run_command(&netstat, &["-ano", "-p", "udp"]).await?;
+            let tasks = run_command(&tasklist, &["/fo", "csv", "/nh"]).await?;
             let output = [tcp, udp]
                 .into_iter()
                 .flat_map(|output| output.lines().map(str::to_owned).collect::<Vec<_>>())
                 .filter(|line| matches!(line.split_whitespace().next(), Some("TCP") | Some("UDP")))
                 .collect::<Vec<_>>()
                 .join("\n");
-            parse_netstat_output(&output)
+            let mut bindings = listening_bindings(parse_netstat_output(&output)?);
+            let images = parse_tasklist_image_map(&tasks)?;
+            enrich_bindings_with_process_names(&mut bindings, &images);
+            Ok(bindings)
         })
     }
 
@@ -198,6 +204,32 @@ fn parse_tasklist_output(requested_pid: u32, input: &str) -> Result<ProcessDetai
     })
 }
 
+pub fn parse_tasklist_image_map(input: &str) -> Result<HashMap<u32, String>, AppError> {
+    input
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|row| {
+            let fields = parse_csv_row(row)?;
+            if fields.len() < 2 {
+                return Err(parse_error("tasklist row", row));
+            }
+            let pid = fields[1]
+                .parse()
+                .map_err(|_| parse_error("tasklist pid", row))?;
+            Ok((pid, fields[0].to_owned()))
+        })
+        .collect()
+}
+
+pub fn enrich_bindings_with_process_names(
+    bindings: &mut [PortBinding],
+    images: &HashMap<u32, String>,
+) {
+    for binding in bindings {
+        binding.process_name = binding.pid.and_then(|pid| images.get(&pid).cloned());
+    }
+}
+
 fn parse_csv_row(row: &str) -> Result<Vec<String>, AppError> {
     let mut fields = Vec::new();
     let mut field = String::new();
@@ -300,6 +332,7 @@ mod tests {
             parse_tasklist_output(4242, r#""node.exe","4242","Console","1","12,345 K""#).unwrap();
 
         assert_eq!(details.access, Access::Allowed);
+        assert_eq!(details.name, "node.exe");
     }
 
     #[test]

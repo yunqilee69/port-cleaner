@@ -37,7 +37,7 @@ const bindings: PortBinding[] = [
     protocol: "udp",
     localAddress: "0.0.0.0",
     port: 5353,
-    state: "unknown",
+    state: "listening",
     pid: null,
     processName: null,
     userName: null,
@@ -82,32 +82,32 @@ describe("Port Cleaner console", () => {
     expect(screen.getByText("5353")).toBeInTheDocument();
 
     await user.type(
-      screen.getByRole("searchbox", { name: /search bindings/i }),
+      screen.getByRole("searchbox", { name: /搜索监听端口/i }),
       "3000",
     );
     expect(screen.getByText("3000")).toBeInTheDocument();
     expect(screen.queryByText("5353")).not.toBeInTheDocument();
 
-    await user.clear(screen.getByRole("searchbox", { name: /search bindings/i }));
+    await user.clear(screen.getByRole("searchbox", { name: /搜索监听端口/i }));
     await user.selectOptions(
-      screen.getByRole("combobox", { name: /protocol/i }),
+      screen.getByRole("combobox", { name: /协议/i }),
       "udp",
     );
     expect(screen.getByText("5353")).toBeInTheDocument();
     expect(screen.queryByText("3000")).not.toBeInTheDocument();
 
     await user.selectOptions(
-      screen.getByRole("combobox", { name: /^access$/i }),
+      screen.getByRole("combobox", { name: /^权限$/i}),
       "restricted",
     );
     const restrictedRow = screen.getByRole("row", {
       name: /udp 0\.0\.0\.0 5353/i,
     });
-    expect(within(restrictedRow).getByText(/restricted/i)).toBeInTheDocument();
+    expect(within(restrictedRow).getByText(/受限/i)).toBeInTheDocument();
+    expect(screen.queryByText("⌘ K")).not.toBeInTheDocument();
   });
 
-  it("combines independent access and binding-state filters, including unknown", async () => {
-    const user = userEvent.setup();
+  it("只显示监听端口，并使用中文界面文案", async () => {
     listPortBindingsMock.mockResolvedValue([
       ...bindings,
       {
@@ -115,6 +115,69 @@ describe("Port Cleaner console", () => {
         id: "tcp:127.0.0.1:3001:4243",
         port: 3001,
         state: "connected",
+        pid: 4243,
+        processName: "已连接进程",
+      },
+    ]);
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "监听端口" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("已连接进程")).not.toBeInTheDocument();
+    expect(screen.getAllByText("监听中").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("combobox", { name: "状态" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Network bindings")).not.toBeInTheDocument();
+  });
+
+  it("按配置的端口范围显示可结束的监听端口", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.clear(screen.getByRole("spinbutton", { name: "起始端口" }));
+    await user.type(screen.getByRole("spinbutton", { name: "起始端口" }), "5000");
+    await user.clear(screen.getByRole("spinbutton", { name: "结束端口" }));
+    await user.type(screen.getByRole("spinbutton", { name: "结束端口" }), "10000");
+
+    expect(screen.getByText("5353")).toBeInTheDocument();
+    expect(screen.queryByText("3000")).not.toBeInTheDocument();
+  });
+
+  it("preserves full unbounded table values for accessible inspection", async () => {
+    const longBinding: PortBinding = {
+      ...bindings[0],
+      id: "tcp:very-long-address:3000:4242",
+      localAddress: "fe80::1234:5678:90ab:cdef%enormously-long-interface-name",
+      processName: "a-process-name-that-is-long-enough-to-require-truncation",
+      userName: "domain\\an-extremely-long-user-name-for-layout-testing",
+    };
+    listPortBindingsMock.mockResolvedValue([longBinding]);
+    render(<App />);
+
+    expect(await screen.findByText(longBinding.localAddress)).toHaveAttribute(
+      "title",
+      longBinding.localAddress,
+    );
+    expect(screen.getByText(longBinding.processName ?? "")).toHaveAttribute(
+      "title",
+      longBinding.processName,
+    );
+    expect(screen.getByText(longBinding.userName ?? "")).toHaveAttribute(
+      "title",
+      longBinding.userName,
+    );
+  });
+
+  it("按访问权限和协议组合筛选监听端口", async () => {
+    const user = userEvent.setup();
+    listPortBindingsMock.mockResolvedValue([
+      ...bindings,
+      {
+        ...bindings[0],
+        id: "tcp:127.0.0.1:3001:4243",
+        port: 3001,
+        state: "listening",
         pid: 4243,
         processName: "worker",
       },
@@ -132,29 +195,19 @@ describe("Port Cleaner console", () => {
     expect(await screen.findByText("worker")).toBeInTheDocument();
 
     await user.selectOptions(
-      screen.getByRole("combobox", { name: /^access$/i }),
+      screen.getByRole("combobox", { name: /^权限$/i}),
       "allowed",
     );
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: /binding state/i }),
-      "listening",
-    );
-
     expect(screen.getByText("node")).toBeInTheDocument();
-    expect(screen.queryByText("worker")).not.toBeInTheDocument();
+    expect(screen.getByText("worker")).toBeInTheDocument();
     expect(screen.queryByText("restricted-listener")).not.toBeInTheDocument();
 
     await user.selectOptions(
-      screen.getByRole("combobox", { name: /^access$/i }),
+      screen.getByRole("combobox", { name: /^权限$/i}),
       "all",
     );
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: /binding state/i }),
-      "unknown",
-    );
-
     expect(screen.getByText("5353")).toBeInTheDocument();
-    expect(screen.queryByText("3000")).not.toBeInTheDocument();
+    expect(screen.getByText("3000")).toBeInTheDocument();
   });
 
   it("disables termination when ownership is restricted", async () => {
@@ -165,7 +218,7 @@ describe("Port Cleaner console", () => {
     });
     expect(
       within(restrictedRow).getByRole("button", {
-        name: /terminate unavailable/i,
+        name: /无法结束进程/i,
       }),
     ).toBeDisabled();
   });
@@ -175,24 +228,24 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     const restrictedDetailsButton = await screen.findByRole("button", {
-      name: /view process details for unknown process.*5353/i,
+      name: /查看 未知进程 的进程详情，端口 5353/i,
     });
     await user.click(restrictedDetailsButton);
     expect(getProcessDetailsMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("complementary", { name: /unknown process/i })).toHaveTextContent(
-      /no valid pid/i,
+    expect(screen.getByRole("complementary", { name: /未知进程/i })).toHaveTextContent(
+      /没有有效的 PID/i,
     );
 
-    await user.click(screen.getByRole("button", { name: /close process details/i }));
+    await user.click(screen.getByRole("button", { name: /关闭进程详情/i }));
     expect(restrictedDetailsButton).toHaveFocus();
 
     const detailsButton = screen.getByRole("button", {
-      name: /view process details for node.*3000/i,
+      name: /查看 node 的进程详情，端口 3000/i,
     });
     await user.click(detailsButton);
     expect(await screen.findByText("/opt/homebrew/bin/node")).toBeInTheDocument();
     expect(getProcessDetailsMock).toHaveBeenCalledWith(4242);
-    expect(screen.getByRole("button", { name: /close process details/i })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /关闭进程详情/i })).toHaveFocus();
   });
 
   it.each([
@@ -208,7 +261,7 @@ describe("Port Cleaner console", () => {
     expect(row).not.toHaveAttribute("tabindex");
 
     const detailsButton = within(row).getByRole("button", {
-      name: /view process details for node.*3000/i,
+      name: /查看 node 的进程详情，端口 3000/i,
     });
     detailsButton.focus();
     await user.keyboard(input);
@@ -238,18 +291,18 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     await user.click(
-      await screen.findByRole("button", { name: /terminate node pid 4242/i }),
+      await screen.findByRole("button", { name: /结束 node，PID 4242/i }),
     );
 
-    const dialog = screen.getByRole("dialog", { name: /confirm termination/i });
+    const dialog = screen.getByRole("dialog", { name: /确认结束进程/i });
     expect(dialog).toHaveTextContent("node");
     expect(dialog).toHaveTextContent("4242");
     expect(dialog).toHaveTextContent("TCP");
     expect(dialog).toHaveTextContent("127.0.0.1:3000");
-    expect(dialog).toHaveTextContent(/unsaved work/i);
+    expect(dialog).toHaveTextContent(/未保存的数据/i);
 
     await user.click(
-      within(dialog).getByRole("button", { name: /terminate process/i }),
+      within(dialog).getByRole("button", { name: /确认结束进程/i }),
     );
 
     await waitFor(() => {
@@ -262,14 +315,56 @@ describe("Port Cleaner console", () => {
     });
     await waitFor(() => expect(listPortBindingsMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /refresh now/i })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /立即刷新/i })).toHaveFocus();
     expect(screen.getByRole("status")).toHaveTextContent(
-      /node.*4242.*terminated/i,
+      /已向 node（PID 4242）发送正常结束信号/i,
     );
-    const successStatus = screen.getByRole("region", { name: /operation status/i });
-    expect(successStatus).toHaveTextContent(/node.*4242.*terminated gracefully/i);
-    await user.click(within(successStatus).getByRole("button", { name: /dismiss/i }));
-    expect(screen.queryByRole("region", { name: /operation status/i })).not.toBeInTheDocument();
+    const successStatus = screen.getByRole("region", { name: /操作状态/i });
+    expect(successStatus).toHaveTextContent(/已向 node（PID 4242）发送正常结束信号/i);
+    await user.click(within(successStatus).getByRole("button", { name: /关闭/i }));
+    expect(screen.queryByRole("region", { name: /操作状态/i })).not.toBeInTheDocument();
+  });
+
+  it("runs a fresh post-termination scan after a pending earlier scan settles", async () => {
+    const user = userEvent.setup();
+    const preTerminationScan = deferred<PortBinding[]>();
+    const postTerminationScan = deferred<PortBinding[]>();
+    terminateProcessMock.mockResolvedValue({ pid: 4242, terminated: true });
+    listPortBindingsMock
+      .mockResolvedValueOnce(bindings)
+      .mockReturnValueOnce(preTerminationScan.promise)
+      .mockReturnValueOnce(postTerminationScan.promise);
+    render(<App />);
+
+    await screen.findByText("node");
+    await user.click(screen.getByRole("button", { name: /立即刷新/i }));
+    expect(listPortBindingsMock).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole("button", { name: /结束 node，PID 4242/i }));
+    await user.click(
+      screen.getByRole("button", { name: /确认结束进程/i }),
+    );
+    await waitFor(() => expect(terminateProcessMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      preTerminationScan.resolve(bindings);
+      await preTerminationScan.promise;
+    });
+
+    await waitFor(() => expect(listPortBindingsMock).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole("row", { name: /tcp 127\.0\.0\.1 3000/i })).toBeInTheDocument();
+
+    await act(async () => {
+      postTerminationScan.resolve([]);
+      await postTerminationScan.promise;
+    });
+
+    await waitFor(() => expect(
+      screen.queryByRole("row", { name: /tcp 127\.0\.0\.1 3000/i }),
+    ).not.toBeInTheDocument());
+    expect(screen.getByRole("region", { name: /操作状态/i })).toHaveTextContent(
+      /已向 node（PID 4242）发送正常结束信号/i,
+    );
   });
 
   it("traps focus while termination submits and restores it only after close", async () => {
@@ -279,14 +374,14 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     const trigger = await screen.findByRole("button", {
-      name: /terminate node pid 4242/i,
+      name: /结束 node，PID 4242/i,
     });
     await user.click(trigger);
 
-    const dialog = screen.getByRole("dialog", { name: /confirm termination/i });
-    const cancelButton = within(dialog).getByRole("button", { name: /cancel/i });
+    const dialog = screen.getByRole("dialog", { name: /确认结束进程/i });
+    const cancelButton = within(dialog).getByRole("button", { name: /取消/i });
     const confirmButton = within(dialog).getByRole("button", {
-      name: /terminate process/i,
+      name: /确认结束进程/i,
     });
     expect(cancelButton).toHaveFocus();
 
@@ -316,12 +411,12 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     const terminateButton = await screen.findByRole("button", {
-      name: /terminate node pid 4242/i,
+      name: /结束 node，PID 4242/i,
     });
     terminateButton.focus();
     await user.keyboard(input);
 
-    expect(screen.getByRole("dialog", { name: /confirm termination/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /确认结束进程/i })).toBeInTheDocument();
     expect(getProcessDetailsMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
   });
@@ -334,16 +429,16 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     const detailsButton = await screen.findByRole("button", {
-      name: /view process details for node.*3000/i,
+      name: /查看 node 的进程详情，端口 3000/i,
     });
     await user.click(detailsButton);
     expect(screen.getByRole("complementary", { name: /node/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /refresh now/i }));
+    await user.click(screen.getByRole("button", { name: /立即刷新/i }));
 
     await waitFor(() => expect(screen.queryByRole("complementary")).not.toBeInTheDocument());
     expect(screen.queryByText("node")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /refresh now/i })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /立即刷新/i })).toHaveFocus();
   });
 
   it("closes process details when the selected binding identity changes", async () => {
@@ -360,12 +455,12 @@ describe("Port Cleaner console", () => {
 
     await user.click(
       await screen.findByRole("button", {
-        name: /view process details for node.*3000/i,
+        name: /查看 node 的进程详情，端口 3000/i,
       }),
     );
     expect(screen.getByRole("complementary", { name: /node/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /refresh now/i }));
+    await user.click(screen.getByRole("button", { name: /立即刷新/i }));
 
     await waitFor(() => expect(screen.queryByRole("complementary")).not.toBeInTheDocument());
     expect(screen.getByText("replacement-service")).toBeInTheDocument();
@@ -384,13 +479,13 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     await user.click(
-      await screen.findByRole("button", { name: /terminate node pid 4242/i }),
+      await screen.findByRole("button", { name: /结束 node，PID 4242/i }),
     );
-    expect(screen.getByRole("dialog", { name: /confirm termination/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /确认结束进程/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /refresh now/i }));
+    await user.click(screen.getByRole("button", { name: /立即刷新/i }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: /confirm termination/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /确认结束进程/i })).not.toBeInTheDocument());
     expect(screen.getByText("replacement-service")).toBeInTheDocument();
     expect(terminateProcessMock).not.toHaveBeenCalled();
   });
@@ -404,14 +499,14 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     const detailsButton = await screen.findByRole("button", {
-      name: /view process details for node.*3000/i,
+      name: /查看 node 的进程详情，端口 3000/i,
     });
     await user.click(detailsButton);
     const drawer = screen.getByRole("complementary", { name: /node/i });
-    await user.click(within(drawer).getByRole("button", { name: /terminate process/i }));
+    await user.click(within(drawer).getByRole("button", { name: /结束进程/i }));
 
-    const dialog = screen.getByRole("dialog", { name: /confirm termination/i });
-    await user.click(within(dialog).getByRole("button", { name: /terminate process/i }));
+    const dialog = screen.getByRole("dialog", { name: /确认结束进程/i });
+    await user.click(within(dialog).getByRole("button", { name: /确认结束进程/i }));
 
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
@@ -423,14 +518,14 @@ describe("Port Cleaner console", () => {
     listPortBindingsMock.mockReturnValue(request.promise);
     render(<App />);
 
-    expect(screen.getByText(/refreshing bindings/i)).toBeVisible();
+    expect(screen.getByText(/正在刷新监听端口/i)).toBeVisible();
 
     await act(async () => {
       request.resolve(bindings);
       await request.promise;
     });
 
-    expect(screen.queryByText(/refreshing bindings/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/正在刷新监听端口/i)).not.toBeInTheDocument();
   });
 
   it("shows a useful error state when bindings cannot be loaded", async () => {
@@ -440,11 +535,11 @@ describe("Port Cleaner console", () => {
     render(<App />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      /could not scan local ports/i,
+      /无法扫描本机监听端口/i,
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/lsof unavailable/i);
     expect(
-      screen.getByRole("button", { name: /retry scan/i }),
+      screen.getByRole("button", { name: /重试扫描/i }),
     ).toBeInTheDocument();
   });
 
@@ -469,79 +564,30 @@ describe("Port Cleaner console", () => {
     }
   });
 
-  it("commits only the newest refresh when requests resolve out of order", async () => {
+  it("skips auto-refresh ticks while a scan is pending and resumes after settle", async () => {
     vi.useFakeTimers();
     try {
-      const oldestRequest = deferred<PortBinding[]>();
-      const newestRequest = deferred<PortBinding[]>();
-      const newestBinding: PortBinding = {
-        ...bindings[0],
-        id: "tcp:127.0.0.1:4000:5252",
-        port: 4000,
-        pid: 5252,
-        processName: "newest-service",
-      };
+      const initialRequest = deferred<PortBinding[]>();
       listPortBindingsMock
-        .mockReturnValueOnce(oldestRequest.promise)
-        .mockReturnValueOnce(newestRequest.promise);
+        .mockReturnValueOnce(initialRequest.promise)
+        .mockResolvedValueOnce(bindings);
       render(<App />);
 
       expect(listPortBindingsMock).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(listPortBindingsMock).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        initialRequest.resolve(bindings);
+        await initialRequest.promise;
+      });
+
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5_000);
       });
       expect(listPortBindingsMock).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        newestRequest.resolve([newestBinding]);
-        await newestRequest.promise;
-      });
-      expect(screen.getByText("newest-service")).toBeInTheDocument();
-      const newestRefreshText = screen.getByText(/last refreshed:/i).textContent;
-      expect(screen.getByRole("button", { name: /refresh now/i })).toBeEnabled();
-
-      await act(async () => {
-        oldestRequest.resolve(bindings);
-        await oldestRequest.promise;
-      });
-      expect(screen.getByText("newest-service")).toBeInTheDocument();
-      expect(screen.queryByText("node")).not.toBeInTheDocument();
-      expect(screen.getByText(/last refreshed:/i)).toHaveTextContent(
-        newestRefreshText ?? "",
-      );
-      expect(screen.getByRole("button", { name: /refresh now/i })).toBeEnabled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("ignores an older refresh error after a newer success", async () => {
-    vi.useFakeTimers();
-    try {
-      const oldestRequest = deferred<PortBinding[]>();
-      const newestRequest = deferred<PortBinding[]>();
-      listPortBindingsMock
-        .mockReturnValueOnce(oldestRequest.promise)
-        .mockReturnValueOnce(newestRequest.promise);
-      render(<App />);
-
-      expect(listPortBindingsMock).toHaveBeenCalledTimes(1);
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(5_000);
-      });
-
-      await act(async () => {
-        newestRequest.resolve(bindings);
-        await newestRequest.promise;
-      });
-      await act(async () => {
-        oldestRequest.reject(new Error("old scan failed"));
-        await oldestRequest.promise.catch(() => undefined);
-      });
-
-      expect(screen.getByText("node")).toBeInTheDocument();
-      expect(screen.queryByText(/old scan failed/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/showing stale data/i)).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -565,23 +611,23 @@ describe("Port Cleaner console", () => {
   });
 
   it.each([
-    ["port binding changed before termination", /binding changed.*no signal was sent/i],
-    ["access is restricted", /permission denied.*restricted/i],
-    ["process 4242 was not found", /process not found.*already exited/i],
-    ["unexpected backend response", /termination failed.*unexpected backend response/i],
+    ["port binding changed before termination", /端口占用已变化.*未发送结束信号/i],
+    ["access is restricted", /权限不足.*进程受限/i],
+    ["process 4242 was not found", /未找到进程.*可能已退出/i],
+    ["unexpected backend response", /结束进程失败.*unexpected backend response/i],
   ])("explains termination error: %s", async (backendError, expectedMessage) => {
     const user = userEvent.setup();
     terminateProcessMock.mockRejectedValue(new Error(backendError));
     render(<App />);
 
     await user.click(
-      await screen.findByRole("button", { name: /terminate node pid 4242/i }),
+      await screen.findByRole("button", { name: /结束 node，PID 4242/i }),
     );
     await user.click(
-      screen.getByRole("button", { name: /terminate process/i }),
+      screen.getByRole("button", { name: /确认结束进程/i }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(expectedMessage);
-    expect(screen.getByRole("dialog", { name: /confirm termination/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /确认结束进程/i })).toBeInTheDocument();
   });
 });

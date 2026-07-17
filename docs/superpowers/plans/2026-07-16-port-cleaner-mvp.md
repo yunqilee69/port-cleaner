@@ -25,7 +25,7 @@
 - `src/App.tsx` — application composition and UI state.
 - `README.md` — local prerequisites, supported platforms, and safe-termination behavior.
 
-There is no Git repository in this workspace. Do not run `git init`, `git add`, `git commit`, or any other commit command.
+This plan is maintained in the current main Git repository. Do not initialize a nested repository or create commits unless explicitly requested.
 
 ### Task 1: Scaffold the Tauri application and command boundary
 
@@ -283,7 +283,7 @@ Use `cfg(target_os)` selection in `platform::system_reader()`:
 
 - Linux lists bindings with `ss -H -ltnup` and retrieves a process with `ps -p <pid> -o pid=,user=,comm=,args=`.
 - macOS lists bindings with `lsof -nP -iTCP -sTCP:LISTEN -iUDP` and retrieves a process with `ps -p <pid> -o pid=,user=,comm=,args=`.
-- Windows lists bindings with `netstat -ano -p tcp` plus `netstat -ano -p udp`, then retrieves a process with `tasklist /fo csv /nh /fi "PID eq <pid>"`.
+- Windows lists bindings with `netstat -ano -p tcp` plus `netstat -ano -p udp`, enriches all rows from one `tasklist /fo csv /nh` PID-to-image scan, and uses filtered `tasklist /fo csv /nh /fi "PID eq <pid>"` only for the selected process details request.
 
 Do not invoke a shell. Use `tokio::process::Command`, pass each executable argument separately, require a successful exit status, and convert stderr losslessly into `AppError::CommandFailed`.
 
@@ -456,7 +456,7 @@ expect(screen.getByRole("button", { name: /terminate unavailable/i })).toBeDisab
 
 - [ ] **Step 3: Implement detail and confirmation components**
 
-Selecting an allowed row loads `getProcessDetails(pid)` and displays process name, PID, user, executable path, and command line. `TerminateDialog` must state the PID and process name, require an explicit **Terminate process** click, call `terminateProcess(pid)`, then refresh the binding list on success. It must expose a cancel button and show backend errors without discarding the current list.
+Selecting an allowed row loads `getProcessDetails(pid)` and displays process name, PID, user, executable path, and command line. `TerminateDialog` must state the PID and process name, require an explicit **Terminate process** click, construct the full `TerminateRequest` from the selected binding (`pid`, `protocol`, `localAddress`, and `port`), call `terminateProcess(request)`, then refresh the binding list on success. It must expose a cancel button and show backend errors without discarding the current list.
 
 - [ ] **Step 4: Verify UI behavior**
 
@@ -474,42 +474,44 @@ Expected: UI interaction test and production frontend build PASS.
 **Files:**
 - Modify: `README.md`
 - Modify: `src-tauri/tests/platform_parsing.rs`
+- Modify: `package.json`
+- Modify: `src-tauri/tauri.conf.json`
+- Create: `.github/workflows/ci.yml`
 - Create: `docs/validation/port-cleaner-manual-checklist.md`
 
-- [ ] **Step 1: Extend parser fixtures for restricted and malformed rows**
+- [ ] **Step 1: Verify parser fixtures for restricted and malformed rows**
 
-Add one malformed line to each fixture and assert it is ignored rather than causing the full scan to fail. Add assertions that records without a PID are `Access::Restricted` and cannot be terminated through the service.
+Keep blank rows ignorable, but reject malformed non-empty rows deterministically instead of silently hiding unexpected system-command output. Assert records without a PID are `Access::Restricted`; service and UI tests must prove they cannot be terminated. Do not change parser behavior as part of release-readiness work.
 
 - [ ] **Step 2: Write the manual platform checklist**
 
-`docs/validation/port-cleaner-manual-checklist.md` must include these exact checks:
-
-```text
-1. Start a local listener on TCP port 3000.
-2. Confirm Port Cleaner displays TCP, 127.0.0.1, port 3000, PID, and process name.
-3. Select the row and verify the detail panel matches the process.
-4. Cancel the termination dialog and verify the listener remains reachable.
-5. Confirm termination, verify the listener exits, then refresh and verify the row disappears.
-6. Select a restricted row and verify no termination control is available.
-```
+`docs/validation/port-cleaner-manual-checklist.md` must separate deterministic restricted-record evidence from conditional real-OS observation. Parser, service, and UI focused tests are mandatory and their passing output must be recorded. Real-OS restricted-row validation is additionally required when the platform actually hides PID/owner metadata; otherwise record N/A with operating-system, account-privilege, screenshot, and native-command evidence. The reproducible local-listener flow remains mandatory, and the checklist is organized by evidence type rather than a fixed item count.
 
 - [ ] **Step 3: Document prerequisites and safety guarantees**
 
-Update `README.md` with the supported commands (`ss`, `lsof`, `netstat`, `ps`, `tasklist`, `taskkill`), build instructions, and the rule that restricted/unknown owners and PID `0` are never terminated. State that the MVP uses graceful termination only and never escalates privileges.
+Replace the scaffold README with Chinese-first operating and build documentation. Cover supported platforms, architecture, fixed trusted commands, native dependencies, restrictive CSP, no automatic elevation, graceful-only termination, exact binding and process-lifetime revalidation, the residual command-launch TOCTOU window, local-only scope, platform limitations, and safety warnings. Add a dependency-free release metadata verifier and include it in `npm run check`. Document that Windows enriches bindings with process image names while user, executable path, and command line remain optional.
 
-- [ ] **Step 4: Run the release-candidate validation suite**
+- [ ] **Step 4: Add cross-platform CI and verify bundle metadata**
+
+Run release metadata verification, its dependency-free negative mutation tests, and frontend tests/build on Ubuntu. Run Rust formatting, Clippy with warnings denied, and tests on macOS, Ubuntu, and Windows; install Tauri WebKitGTK packages on Ubuntu. Pin actions to immutable SHAs and Rust `1.95.0`; use Cargo lock enforcement where supported. Tests must use fixtures/fakes and must not terminate real processes. Verify exact version `0.1.0`, `productName`, unique reverse-DNS identifier, exact CSP source allowlists, empty least-privilege capability, and current-platform bundle targets.
+
+- [ ] **Step 5: Run the release-candidate validation suite**
 
 Run:
 
 ```bash
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml --locked
+npm run verify:release
+npm run test:release-metadata
 npm test
 npm run build
+npm run check
 npm run tauri build -- --debug
 ```
 
-Expected: every command exits `0`; the debug app and DMG bundles are present under `src-tauri/target/debug/bundle/`.
+Expected: every command exits `0` on the current host, including a debug native bundle with the empty capability. Packaging still requires each target operating system because Tauri does not cross-build every native bundle from one host. A controller may perform the runtime browser/UI audit; Playwright and browser downloads are not required for this task.
 
 ## Plan Self-Review
 

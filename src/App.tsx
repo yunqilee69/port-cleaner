@@ -14,7 +14,6 @@ import { ConsoleHeader } from "./components/ConsoleHeader";
 import {
   FilterBar,
   type AccessFilter,
-  type BindingStateFilter,
   type ProtocolFilter,
 } from "./components/FilterBar";
 import { ProcessDetailsPanel } from "./components/ProcessDetailsPanel";
@@ -25,6 +24,7 @@ import type { PortBinding } from "./types/portCleaner";
 const REFRESH_INTERVAL_MS = 5_000;
 
 type LoadState = "loading" | "ready" | "error";
+type RefreshMode = "join-active" | "after-active";
 
 interface BindingTarget {
   fingerprint: string;
@@ -68,15 +68,15 @@ function terminationErrorMessage(error: unknown): string {
   const normalized = message.toLowerCase();
 
   if (normalized.includes("port binding changed")) {
-    return "Binding changed before termination. No signal was sent; refresh and verify the new owner.";
+    return "结束前端口占用已变化，未发送结束信号；请刷新后确认新的占用进程。";
   }
   if (normalized.includes("restricted") || normalized.includes("permission")) {
-    return "Permission denied. This process is restricted; run with appropriate privileges and try again.";
+    return "权限不足。该进程受限，请使用适当权限重新运行后再试。";
   }
   if (normalized.includes("not found")) {
-    return "Process not found. It may have already exited; refresh the binding list.";
+    return "未找到进程。它可能已退出，请刷新监听端口列表。";
   }
-  return `Termination failed: ${message}`;
+  return `结束进程失败：${message}`;
 }
 
 function App() {
@@ -91,8 +91,8 @@ function App() {
   const [protocolFilter, setProtocolFilter] =
     useState<ProtocolFilter>("all");
   const [accessFilter, setAccessFilter] = useState<AccessFilter>("all");
-  const [bindingStateFilter, setBindingStateFilter] =
-    useState<BindingStateFilter>("all");
+  const [portStart, setPortStart] = useState("");
+  const [portEnd, setPortEnd] = useState("");
   const [selectedTarget, setSelectedTarget] = useState<BindingTarget | null>(null);
   const [terminationTarget, setTerminationTarget] =
     useState<BindingTarget | null>(null);
@@ -101,6 +101,7 @@ function App() {
   const [announcement, setAnnouncement] = useState("");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const hasBindingsRef = useRef(false);
+  const activeRefreshRef = useRef<Promise<void> | null>(null);
   const isMountedRef = useRef(false);
   const refreshSequenceRef = useRef(0);
   const detailsTriggerRef = useRef<HTMLElement | null>(null);
@@ -124,46 +125,67 @@ function App() {
     };
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (
+    mode: RefreshMode = "join-active",
+  ): Promise<void> => {
+    const activeRefresh = activeRefreshRef.current;
+    if (activeRefresh) {
+      if (mode === "join-active") {
+        return activeRefresh;
+      }
+      await activeRefresh;
+      if (!isMountedRef.current) {
+        return;
+      }
+      if (activeRefreshRef.current) {
+        return activeRefreshRef.current;
+      }
+    }
+
     const requestSequence = ++refreshSequenceRef.current;
     if (isMountedRef.current) {
       setIsRefreshing(true);
     }
-    try {
-      const nextBindings = await listPortBindings();
-      if (
-        !isMountedRef.current ||
-        requestSequence !== refreshSequenceRef.current
-      ) {
-        return;
+    const request = (async () => {
+      try {
+        const nextBindings = await listPortBindings();
+        if (
+          !isMountedRef.current ||
+          requestSequence !== refreshSequenceRef.current
+        ) {
+          return;
+        }
+        setBindings(nextBindings);
+        hasBindingsRef.current = nextBindings.length > 0;
+        setLoadState("ready");
+        setLoadError(null);
+        setIsStale(false);
+        setLastRefreshed(new Date());
+      } catch (error) {
+        if (
+          !isMountedRef.current ||
+          requestSequence !== refreshSequenceRef.current
+        ) {
+          return;
+        }
+        setLoadError(errorText(error));
+        if (hasBindingsRef.current) {
+          setIsStale(true);
+        } else {
+          setLoadState("error");
+        }
+      } finally {
+        if (
+          isMountedRef.current &&
+          requestSequence === refreshSequenceRef.current
+        ) {
+          setIsRefreshing(false);
+        }
+        activeRefreshRef.current = null;
       }
-      setBindings(nextBindings);
-      hasBindingsRef.current = nextBindings.length > 0;
-      setLoadState("ready");
-      setLoadError(null);
-      setIsStale(false);
-      setLastRefreshed(new Date());
-    } catch (error) {
-      if (
-        !isMountedRef.current ||
-        requestSequence !== refreshSequenceRef.current
-      ) {
-        return;
-      }
-      setLoadError(errorText(error));
-      if (hasBindingsRef.current) {
-        setIsStale(true);
-      } else {
-        setLoadState("error");
-      }
-    } finally {
-      if (
-        isMountedRef.current &&
-        requestSequence === refreshSequenceRef.current
-      ) {
-        setIsRefreshing(false);
-      }
-    }
+    })();
+    activeRefreshRef.current = request;
+    return request;
   }, []);
 
   useEffect(() => {
@@ -193,19 +215,31 @@ function App() {
 
   const filteredBindings = useMemo(() => {
     const normalizedQuery = deferredQuery.trim().toLowerCase();
+    const start = portStart === "" ? null : Number(portStart);
+    const end = portEnd === "" ? null : Number(portEnd);
+    const hasInvalidRange =
+      (start !== null && (!Number.isInteger(start) || start < 1 || start > 65535)) ||
+      (end !== null && (!Number.isInteger(end) || end < 1 || end > 65535)) ||
+      (start !== null && end !== null && start > end);
 
     return bindings
       .filter((binding) => {
+        if (hasInvalidRange) {
+          return false;
+        }
+        if (binding.state !== "listening") {
+          return false;
+        }
+        if (start !== null && binding.port < start) {
+          return false;
+        }
+        if (end !== null && binding.port > end) {
+          return false;
+        }
         if (protocolFilter !== "all" && binding.protocol !== protocolFilter) {
           return false;
         }
         if (accessFilter !== "all" && binding.access !== accessFilter) {
-          return false;
-        }
-        if (
-          bindingStateFilter !== "all" &&
-          binding.state !== bindingStateFilter
-        ) {
           return false;
         }
         if (!normalizedQuery) return true;
@@ -228,7 +262,7 @@ function App() {
           left.protocol.localeCompare(right.protocol) ||
           left.localAddress.localeCompare(right.localAddress),
       );
-  }, [accessFilter, bindingStateFilter, bindings, deferredQuery, protocolFilter]);
+  }, [accessFilter, bindings, deferredQuery, portEnd, portStart, protocolFilter]);
 
   const handleTerminate = async () => {
     const bindingToTerminate = terminationBinding;
@@ -247,11 +281,11 @@ function App() {
         port: bindingToTerminate.port,
       });
       if (!isMountedRef.current) return;
-      const processLabel = bindingToTerminate.processName ?? "Process";
-      const message = `${processLabel} PID ${pid} terminated gracefully.`;
+      const processLabel = bindingToTerminate.processName ?? "该进程";
+      const message = `已向 ${processLabel}（PID ${pid}）发送正常结束信号。`;
       setSuccessMessage(message);
       setAnnouncement(message);
-      await refresh();
+      await refresh("after-active");
       if (!isMountedRef.current) return;
       setTerminationTarget(null);
       setSelectedTarget(null);
@@ -283,7 +317,7 @@ function App() {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#binding-table">
-        Skip to bindings
+        跳到监听端口列表
       </a>
       <ConsoleHeader
         autoRefresh={autoRefresh}
@@ -298,15 +332,15 @@ function App() {
           {isRefreshing && (
             <div className="operation-banner operation-banner--refresh" aria-live="polite">
               <span className="spinner spinner--compact" aria-hidden="true" />
-              Refreshing bindings…
+              正在刷新监听端口…
             </div>
           )}
           {successMessage && (
-            <div className="operation-banner operation-banner--success" aria-label="Operation status" role="region">
+            <div className="operation-banner operation-banner--success" aria-label="操作状态" role="region">
               <span aria-hidden="true">✓</span>
               <strong>{successMessage}</strong>
               <button className="text-button" onClick={() => setSuccessMessage(null)} type="button">
-                Dismiss
+                关闭
               </button>
             </div>
           )}
@@ -314,11 +348,11 @@ function App() {
         <section className="overview" aria-labelledby="overview-title">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Local socket inventory</p>
-              <h2 id="overview-title">Active bindings</h2>
+              <p className="eyebrow">本机监听端口</p>
+              <h2 id="overview-title">监听端口概览</h2>
             </div>
             <p className="refresh-time">
-              Last refreshed: {lastRefreshed ? lastRefreshed.toLocaleTimeString() : "Not yet"}
+              最近刷新：{lastRefreshed ? lastRefreshed.toLocaleTimeString() : "尚未刷新"}
             </p>
           </div>
           <SummaryMetrics bindings={bindings} />
@@ -327,22 +361,24 @@ function App() {
         <section className="binding-console" aria-labelledby="bindings-title">
           <div className="section-heading console-heading">
             <div>
-              <p className="eyebrow">Inspection surface</p>
-              <h2 id="bindings-title">Network bindings</h2>
+              <p className="eyebrow">端口检查</p>
+              <h2 id="bindings-title">监听端口</h2>
             </div>
             <span className="result-count" aria-live="polite">
-              {filteredBindings.length} shown / {bindings.length} total
+              显示 {filteredBindings.length} / 共 {bindings.length} 个
             </span>
           </div>
 
           <FilterBar
             accessFilter={accessFilter}
-            bindingStateFilter={bindingStateFilter}
             onAccessFilterChange={setAccessFilter}
-            onBindingStateFilterChange={setBindingStateFilter}
+            onPortEndChange={setPortEnd}
+            onPortStartChange={setPortStart}
             onProtocolFilterChange={setProtocolFilter}
             onQueryChange={setQuery}
             protocolFilter={protocolFilter}
+            portEnd={portEnd}
+            portStart={portStart}
             query={query}
           />
 
@@ -350,10 +386,10 @@ function App() {
             <div className="state-banner state-banner--warning" role="alert">
               <span aria-hidden="true">▲</span>
               <div>
-                <strong>Showing stale data.</strong> The latest scan failed: {loadError}
+                <strong>正在显示上一次结果。</strong>最新扫描失败：{loadError}
               </div>
               <button className="text-button" onClick={() => void refresh()}>
-                Retry scan
+                重试扫描
               </button>
             </div>
           )}
@@ -361,18 +397,18 @@ function App() {
           {loadState === "loading" && bindings.length === 0 ? (
             <div className="loading-state" aria-live="polite">
               <span className="spinner" aria-hidden="true" />
-              <strong>Scanning local interfaces…</strong>
-              <span>Resolving ports and process ownership.</span>
+              <strong>正在扫描本机监听端口…</strong>
+              <span>正在关联端口与占用进程。</span>
             </div>
           ) : loadState === "error" ? (
             <div className="error-state" role="alert">
               <span className="state-icon" aria-hidden="true">!</span>
               <div>
-                <strong>Could not scan local ports.</strong>
+                <strong>无法扫描本机监听端口。</strong>
                 <p>{loadError}</p>
               </div>
               <button className="secondary-button" onClick={() => void refresh()}>
-                Retry scan
+                重试扫描
               </button>
             </div>
           ) : (
@@ -381,8 +417,7 @@ function App() {
               hasFilters={
                 query.length > 0 ||
                 protocolFilter !== "all" ||
-                accessFilter !== "all" ||
-                bindingStateFilter !== "all"
+                accessFilter !== "all"
               }
               onTerminate={openTermination}
               onViewDetails={openDetails}

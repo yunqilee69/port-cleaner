@@ -367,7 +367,7 @@ h2 {
 }
 
 .console-main {
-  width: min(1540px, 100%);
+  width: min(2310px, 100%);
   margin: 0 auto;
   padding: clamp(26px, 4vw, 56px) clamp(16px, 3vw, 48px) 80px;
 }
@@ -539,7 +539,8 @@ h2 {
 }
 
 .search-field input,
-.select-field select {
+.select-field select,
+.select-field input {
   width: 100%;
   min-height: 46px;
   border: 1px solid var(--line-strong);
@@ -550,7 +551,7 @@ h2 {
 }
 
 .search-field input {
-  padding: 0 64px 0 42px;
+  padding: 0 14px 0 42px;
 }
 
 .search-field input::placeholder {
@@ -560,19 +561,11 @@ h2 {
 .search-field input:hover,
 .search-field input:focus,
 .select-field select:hover,
-.select-field select:focus {
+.select-field select:focus,
+.select-field input:hover,
+.select-field input:focus {
   border-color: #628b7e;
   background: #0d1517;
-}
-
-.search-field kbd {
-  position: absolute;
-  right: 10px;
-  padding: 3px 6px;
-  border: 1px solid var(--line);
-  color: #7f8989;
-  background: #151c1f;
-  font-size: 0.66rem;
 }
 
 .select-field {
@@ -598,12 +591,18 @@ h2 {
   padding: 15px 38px 1px 11px;
 }
 
+.select-field input {
+  padding: 15px 11px 1px;
+}
+
 .table-frame {
-  overflow: hidden;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 table {
   width: 100%;
+  min-width: 1120px;
   border-collapse: collapse;
   color: #e9e6dc;
   font-size: 0.82rem;
@@ -656,6 +655,17 @@ td code {
   color: #c8d2cf;
   font-size: 0.78rem;
 }
+
+.cell-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-text--address { max-width: 220px; }
+.cell-text--process { max-width: 200px; }
+.cell-text--user { max-width: 170px; }
 
 .protocol-badge,
 .state-badge,
@@ -1149,7 +1159,7 @@ td code {
   }
 }
 
-@media (max-width: 780px) {
+@media (max-width: 920px) {
   .console-header {
     position: relative;
     flex-direction: column;
@@ -1206,6 +1216,10 @@ td code {
     width: 100%;
   }
 
+  table {
+    min-width: 0;
+  }
+
   thead {
     position: absolute;
     width: 1px;
@@ -1256,6 +1270,13 @@ td code {
 
   td > * {
     justify-self: end;
+  }
+
+  .cell-text {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   td:last-child {

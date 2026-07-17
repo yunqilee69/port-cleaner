@@ -38,7 +38,7 @@ export function ProcessDetailsPanel({
       return undefined;
     }
     if (!binding.pid || !Number.isInteger(binding.pid) || binding.pid <= 0) {
-      setDetailState({ status: "error", message: "Process details are unavailable because this binding has no valid PID." });
+      setDetailState({ status: "error", message: "该监听端口没有有效的 PID，无法获取进程详情。" });
       return undefined;
     }
 
@@ -84,10 +84,10 @@ export function ProcessDetailsPanel({
     <aside className="detail-panel" aria-labelledby="detail-title">
       <div className="detail-header">
         <div>
-          <p className="eyebrow">Process inspection</p>
-          <h2 id="detail-title">{binding.processName ?? "Unknown process"}</h2>
+          <p className="eyebrow">进程详情</p>
+          <h2 id="detail-title">{binding.processName ?? "未知进程"}</h2>
         </div>
-        <button aria-label="Close process details" className="icon-button" onClick={onClose} ref={closeButtonRef} type="button">×</button>
+        <button aria-label="关闭进程详情" className="icon-button" onClick={onClose} ref={closeButtonRef} type="button">×</button>
       </div>
 
       <div className="detail-body">
@@ -97,21 +97,21 @@ export function ProcessDetailsPanel({
           <span className={`access-badge access-badge--${binding.access}`}>{binding.access}</span>
         </div>
 
-        {detailState.status === "loading" && <div className="panel-loading"><span className="spinner" aria-hidden="true" />Loading process details…</div>}
-        {detailState.status === "error" && <div className="panel-error" role="alert"><strong>Details unavailable</strong><p>{detailState.message}</p></div>}
+        {detailState.status === "loading" && <div className="panel-loading"><span className="spinner" aria-hidden="true" />正在读取进程详情…</div>}
+        {detailState.status === "error" && <div className="panel-error" role="alert"><strong>详情不可用</strong><p>{detailState.message}</p></div>}
         {detailState.status === "ready" && (
           <dl className="detail-list">
             <div><dt>PID</dt><dd><code>{detailState.details.pid}</code></dd></div>
-            <div><dt>User</dt><dd>{detailState.details.userName ?? "Unavailable"}</dd></div>
-            <div><dt>Executable path</dt><dd><code className="copy-block">{detailState.details.executablePath ?? "Unavailable"}</code></dd></div>
-            <div><dt>Command line</dt><dd><code className="copy-block">{detailState.details.commandLine ?? "Unavailable"}</code></dd></div>
+            <div><dt>用户</dt><dd>{detailState.details.userName ?? "不可用"}</dd></div>
+            <div><dt>可执行文件</dt><dd><code className="copy-block">{detailState.details.executablePath ?? "不可用"}</code></dd></div>
+            <div><dt>命令行</dt><dd><code className="copy-block">{detailState.details.commandLine ?? "不可用"}</code></dd></div>
           </dl>
         )}
       </div>
 
       <div className="detail-actions">
-        <button className="secondary-button" onClick={onClose} type="button">Close</button>
-        <button className="danger-button" disabled={!canTerminate} onClick={(event) => onTerminate(binding, event.currentTarget)} type="button">Terminate process</button>
+        <button className="secondary-button" onClick={onClose} type="button">关闭</button>
+        <button className="danger-button" disabled={!canTerminate} onClick={(event) => onTerminate(binding, event.currentTarget)} type="button">结束进程</button>
       </div>
     </aside>
   );
