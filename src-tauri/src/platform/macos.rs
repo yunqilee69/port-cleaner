@@ -81,6 +81,7 @@ fn parse_ps_details_output(pid: u32, output: CommandOutput) -> Result<ProcessDet
     )))
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn identity_from_start_time(seconds: u64, microseconds: u64) -> ProcessIdentity {
     ProcessIdentity::new(format!("macos:{seconds}:{microseconds}"))
 }
