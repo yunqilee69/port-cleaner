@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const RELEASE_VERSION = "1.0.0";
+const RELEASE_VERSION = "1.0.1";
 const EXPECTED_CSP_SOURCES = {
   "default-src": ["'self'"],
   "connect-src": ["'self'", "http://ipc.localhost", "ipc:"],

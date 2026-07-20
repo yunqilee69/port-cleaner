@@ -1,6 +1,6 @@
 [package]
 name = "port-cleaner"
-version = "1.0.0"
+version = "1.0.1"
 description = "A desktop utility for inspecting and releasing local ports"
 authors = ["you"]
 edition = "2021"

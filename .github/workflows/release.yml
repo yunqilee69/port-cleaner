@@ -67,7 +67,7 @@ jobs:
         with:
           tagName: __VERSION__
           releaseName: Port Cleaner v__VERSION__
-          releaseBody: 跨平台端口清理工具的首个正式版本。
+          releaseBody: Port Cleaner 1.0.1，优化桌面界面并修复 Windows 启动、刷新和进程结束体验。
           generateReleaseNotes: true
           prerelease: false
           releaseDraft: false
