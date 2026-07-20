@@ -3,6 +3,8 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use tokio::process::Command;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 use crate::domain::{Access, BindingState, PortBinding, ProcessDetails, Protocol};
 use crate::error::AppError;
@@ -89,6 +91,8 @@ pub(in crate::platform) async fn run_command_output(
     for (name, value) in environment {
         command.env(name, value);
     }
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
     let output = command
         .output()
         .await
