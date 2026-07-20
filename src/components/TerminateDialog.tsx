@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 import type { PortBinding } from "../types/portCleaner";
+import { terminationPresentation } from "../utils/termination";
 
 interface TerminateDialogProps {
   binding: PortBinding | null;
@@ -87,6 +88,10 @@ export function TerminateDialog({
   }, [isOpen, isSubmitting]);
 
   if (!binding) return null;
+  const presentation = binding.pid === null
+    ? null
+    : terminationPresentation(binding.pid);
+  const forceful = presentation?.forceful ?? false;
 
   return (
     <div className="dialog-backdrop">
@@ -95,20 +100,23 @@ export function TerminateDialog({
         <p className="eyebrow">危险操作</p>
         <h2 id="terminate-title">确认结束进程</h2>
         <p id="terminate-warning" className="dialog-warning">
-          正常结束该进程可能中断当前连接，并造成未保存的数据丢失。
+          {forceful
+            ? "将强制结束目标进程及其子进程，可能中断当前连接，并造成未保存的数据丢失。"
+            : "正常结束该进程可能中断当前连接，并造成未保存的数据丢失。"}
         </p>
 
         <dl className="termination-facts">
           <div><dt>进程</dt><dd>{binding.processName ?? "未知进程"}</dd></div>
           <div><dt>PID</dt><dd><code>{binding.pid ?? "不可用"}</code></dd></div>
           <div><dt>监听端口</dt><dd><span className={`protocol-badge protocol-badge--${binding.protocol}`}>{binding.protocol.toUpperCase()}</span> <code>{binding.localAddress}:{binding.port}</code></dd></div>
+          <div className="termination-command"><dt>执行命令</dt><dd><code>{presentation?.command ?? "不可用"}</code></dd></div>
         </dl>
 
-        <div className="signal-note"><span aria-hidden="true">i</span><p>Port Cleaner 只发送操作系统的正常结束信号，不会强制结束进程。</p></div>
+        <div className="signal-note"><span aria-hidden="true">i</span><p>{forceful ? "Port Cleaner 将强制结束目标进程及其整个子进程树。" : "Port Cleaner 将发送操作系统的正常结束信号。"}</p></div>
         {error && <div className="dialog-error" role="alert">{error}</div>}
         <div className="dialog-actions">
           <button className="secondary-button" disabled={isSubmitting} onClick={onCancel} ref={cancelRef} type="button">取消</button>
-          <button className="danger-button" disabled={isSubmitting} onClick={onConfirm} type="button">{isSubmitting ? "正在结束进程…" : "确认结束进程"}</button>
+          <button className="danger-button" disabled={isSubmitting} onClick={onConfirm} type="button">{isSubmitting ? (forceful ? "正在强制结束进程…" : "正在结束进程…") : (forceful ? "确认强制结束进程" : "确认结束进程")}</button>
         </div>
       </section>
     </div>

@@ -1024,6 +1024,17 @@ td code {
   min-width: 0;
 }
 
+.termination-command code {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  color: #dce4df;
+  background: #080d0f;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .signal-note {
   align-items: flex-start;
   gap: 10px;

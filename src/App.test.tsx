@@ -365,6 +365,26 @@ describe("Port Cleaner console", () => {
     expect(screen.queryByRole("region", { name: /操作状态/i })).not.toBeInTheDocument();
   });
 
+  it("shows the forceful Windows command before termination", async () => {
+    const userAgent = vi
+      .spyOn(window.navigator, "userAgent", "get")
+      .mockReturnValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    const user = userEvent.setup();
+
+    try {
+      render(<App />);
+      await user.click(
+        await screen.findByRole("button", { name: /结束 node，PID 4242/i }),
+      );
+
+      const dialog = screen.getByRole("dialog", { name: /确认结束进程/i });
+      expect(dialog).toHaveTextContent("taskkill.exe /PID 4242 /T /F");
+      expect(dialog).toHaveTextContent(/强制结束目标进程及其子进程/i);
+    } finally {
+      userAgent.mockRestore();
+    }
+  });
+
   it("runs a fresh post-termination scan after a pending earlier scan settles", async () => {
     const user = userEvent.setup();
     const preTerminationScan = deferred<PortBinding[]>();

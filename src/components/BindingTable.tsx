@@ -78,7 +78,7 @@ export function BindingTable({
                       className="terminate-button"
                       disabled={!terminable}
                       onClick={(event) => onTerminate(binding, event.currentTarget)}
-                      title={terminable ? "正常结束进程" : "PID 不可用或权限受限"}
+                      title={terminable ? "结束进程" : "PID 不可用或权限受限"}
                       type="button"
                     >
                       结束

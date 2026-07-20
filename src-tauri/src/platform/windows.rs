@@ -56,8 +56,8 @@ impl ProcessTerminator for SystemProcessTerminator {
         Box::pin(async move {
             let system_directory = system_directory()?;
             let (executable, args) = termination_command(system_directory, pid);
-            let output =
-                run_command_output(&executable, &[&args[0], &args[1], &args[2]], &[]).await?;
+            let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+            let output = run_command_output(&executable, &arg_refs, &[]).await?;
             if !output.success {
                 return Err(map_termination_output(output));
             }
@@ -66,10 +66,15 @@ impl ProcessTerminator for SystemProcessTerminator {
     }
 }
 
-fn termination_command(system_directory: PathBuf, pid: u32) -> (PathBuf, [String; 3]) {
+fn termination_command(system_directory: PathBuf, pid: u32) -> (PathBuf, [String; 4]) {
     (
         system_executable_from_directory(system_directory, "taskkill.exe"),
-        ["/PID".to_owned(), pid.to_string(), "/T".to_owned()],
+        [
+            "/PID".to_owned(),
+            pid.to_string(),
+            "/T".to_owned(),
+            "/F".to_owned(),
+        ],
     )
 }
 
@@ -336,15 +341,14 @@ mod tests {
     }
 
     #[test]
-    fn termination_command_uses_system32_taskkill_without_force() {
+    fn termination_command_uses_system32_taskkill_for_the_full_process_tree() {
         let (executable, args) = termination_command(PathBuf::from(r"C:\Windows\System32"), 4242);
 
         assert_eq!(
             executable,
             PathBuf::from(r"C:\Windows\System32").join("taskkill.exe")
         );
-        assert_eq!(args, ["/PID", "4242", "/T"]);
-        assert!(!args.iter().any(|argument| argument == "/F"));
+        assert_eq!(args.as_slice(), ["/PID", "4242", "/T", "/F"]);
     }
 
     #[test]

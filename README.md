@@ -11,7 +11,7 @@ Port Cleaner 是一个本地桌面工具，用于查看当前机器上的 TCP/UD
 | --- | --- | --- |
 | macOS | 支持 | `lsof`、`ps`、`/bin/kill -TERM`、`proc_pidinfo` |
 | Linux | 支持 | `ss`、`ps`、`/proc/<pid>/stat`、`/bin/kill -TERM` |
-| Windows | 支持 | `netstat.exe`、单次 `tasklist.exe /fo csv /nh`、`taskkill.exe /PID <pid> /T`、Windows Process API |
+| Windows | 支持 | `netstat.exe`、单次 `tasklist.exe /fo csv /nh`、`taskkill.exe /PID <pid> /T /F`、Windows Process API |
 
 实际可见范围取决于当前用户权限、系统工具输出和操作系统安全策略。CI 会在 macOS、Ubuntu 和 Windows 上编译并运行 Rust 测试，但真实端口发现和真实进程终止仍需在各平台人工验证。
 
@@ -22,7 +22,7 @@ Port Cleaner 是一个本地桌面工具，用于查看当前机器上的 TCP/UD
 - 查看可用的进程详情；字段受平台和权限限制。
 - 对受限/未知所有者和 PID `0` 禁用终止操作。
 - 终止前要求显式确认，并重新验证目标绑定和进程生命周期身份。
-- 仅使用非强制终止：Unix 发送 `SIGTERM`；Windows 调用不带 `/F` 的 `taskkill /T`。
+- Unix 发送 `SIGTERM`；Windows 使用 `taskkill /T /F` 强制结束目标及其子进程树。确认弹窗会展示实际执行命令和数据丢失警告。
 
 ## 架构
 
@@ -107,8 +107,8 @@ Tauri 只能为当前宿主平台构建对应格式；例如 DMG 只能在 macOS
 
 - 不自动请求管理员/root 权限，不显示系统提权提示，也不重试为高权限操作。
 - 无法确定所有者、无法读取 PID 或权限受限的记录只用于查看，不能终止。
-- 不提供 `SIGKILL`、`kill -9`、`taskkill /F` 或“强制终止”回退。
-- Windows 的 `/T` 会作用于目标进程树，但未使用 `/F`；具体退出行为仍由 Windows 和目标进程决定。
+- Unix 不提供 `SIGKILL` 或 `kill -9`；Windows 在用户显式确认后使用 `taskkill /T /F`。
+- Windows 的 `/T /F` 会强制结束目标进程树，可能造成目标程序未保存的数据丢失。
 
 ### 本地范围与非目标
 

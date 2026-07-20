@@ -19,6 +19,7 @@ import {
 import { ProcessDetailsPanel } from "./components/ProcessDetailsPanel";
 import { TerminateDialog } from "./components/TerminateDialog";
 import type { PortBinding } from "./types/portCleaner";
+import { terminationPresentation } from "./utils/termination";
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -286,7 +287,10 @@ function App() {
       });
       if (!isMountedRef.current) return;
       const processLabel = bindingToTerminate.processName ?? "该进程";
-      const message = `已向 ${processLabel}（PID ${pid}）发送正常结束信号。`;
+      const presentation = terminationPresentation(pid);
+      const message = presentation.forceful
+        ? `已强制结束 ${processLabel}（PID ${pid}）及其子进程。`
+        : `已向 ${processLabel}（PID ${pid}）发送正常结束信号。`;
       setSuccessMessage(message);
       setAnnouncement(message);
       await refresh("after-active");

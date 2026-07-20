@@ -57,7 +57,7 @@ npm test -- src/App.test.tsx -t "disables termination when ownership is restrict
 - 验证 PID `0`、未知 PID 和权限受限记录没有可用的终止操作。
 - 验证应用不会出现 `sudo`、UAC 或其他自动提权提示。
 - 验证失败后列表仍保留，错误可见，并可安全刷新。
-- 记录操作系统版本、CPU 架构、安装包格式和结果；Windows 同时确认 `/T` 的进程树影响符合预期。
+- 记录操作系统版本、CPU 架构、安装包格式和结果；Windows 同时确认弹窗展示 `taskkill.exe /PID <pid> /T /F`，且 `/T /F` 的强制进程树影响符合预期。
 
 ## 发布产物
 
