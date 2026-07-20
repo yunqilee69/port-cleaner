@@ -17,7 +17,6 @@ import {
   type ProtocolFilter,
 } from "./components/FilterBar";
 import { ProcessDetailsPanel } from "./components/ProcessDetailsPanel";
-import { SummaryMetrics } from "./components/SummaryMetrics";
 import { TerminateDialog } from "./components/TerminateDialog";
 import type { PortBinding } from "./types/portCleaner";
 
@@ -117,6 +116,11 @@ function App() {
     () => resolveBindingTarget(bindings, terminationTarget),
     [bindings, terminationTarget],
   );
+  const bindingStatistics = useMemo(() => ({
+    restricted: bindings.filter((binding) => binding.access === "restricted").length,
+    tcp: bindings.filter((binding) => binding.protocol === "tcp").length,
+    udp: bindings.filter((binding) => binding.protocol === "udp").length,
+  }), [bindings]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -328,14 +332,8 @@ function App() {
       />
 
       <main className="console-main">
-        <div className="operation-status-stack">
-          {isRefreshing && (
-            <div className="operation-banner operation-banner--refresh" aria-live="polite">
-              <span className="spinner spinner--compact" aria-hidden="true" />
-              正在刷新监听端口…
-            </div>
-          )}
-          {successMessage && (
+        {successMessage && (
+          <div className="operation-status-stack">
             <div className="operation-banner operation-banner--success" aria-label="操作状态" role="region">
               <span aria-hidden="true">✓</span>
               <strong>{successMessage}</strong>
@@ -343,30 +341,25 @@ function App() {
                 关闭
               </button>
             </div>
-          )}
-        </div>
-        <section className="overview" aria-labelledby="overview-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">本机监听端口</p>
-              <h2 id="overview-title">监听端口概览</h2>
-            </div>
-            <p className="refresh-time">
-              最近刷新：{lastRefreshed ? lastRefreshed.toLocaleTimeString() : "尚未刷新"}
-            </p>
           </div>
-          <SummaryMetrics bindings={bindings} />
-        </section>
-
+        )}
         <section className="binding-console" aria-labelledby="bindings-title">
           <div className="section-heading console-heading">
             <div>
               <p className="eyebrow">端口检查</p>
               <h2 id="bindings-title">监听端口</h2>
             </div>
-            <span className="result-count" aria-live="polite">
-              显示 {filteredBindings.length} / 共 {bindings.length} 个
-            </span>
+            <div aria-label="端口统计" className="binding-statistics" role="region">
+              <span className="result-count" aria-live="polite">
+                显示 {filteredBindings.length} / 共 {bindings.length} 个
+              </span>
+              <span className="binding-stat"><strong>TCP</strong> {bindingStatistics.tcp}</span>
+              <span className="binding-stat"><strong>UDP</strong> {bindingStatistics.udp}</span>
+              <span className="binding-stat binding-stat--restricted"><strong>受限</strong> {bindingStatistics.restricted}</span>
+              <span className="refresh-time">
+                最近刷新：{lastRefreshed ? lastRefreshed.toLocaleTimeString() : "尚未刷新"}
+              </span>
+            </div>
           </div>
 
           <FilterBar

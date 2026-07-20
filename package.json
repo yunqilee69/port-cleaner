@@ -10,7 +10,9 @@
     "test": "vitest run",
     "verify:release": "node scripts/verify-release-metadata.mjs",
     "test:release-metadata": "node --test scripts/verify-release-metadata.test.mjs",
-    "check": "npm run verify:release && npm run test:release-metadata && npm test && npm run build",
+    "test:desktop-config": "node --test scripts/desktop-config.test.mjs",
+    "test:ui-style": "node --test scripts/ui-style.test.mjs",
+    "check": "npm run verify:release && npm run test:release-metadata && npm run test:desktop-config && npm run test:ui-style && npm test && npm run build",
     "tauri": "tauri"
   },
   "dependencies": {

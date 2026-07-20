@@ -74,6 +74,16 @@ describe("Port Cleaner console", () => {
     getProcessDetailsMock.mockResolvedValue(details);
   });
 
+  it("shows only the Port Cleaner brand in the header", () => {
+    render(<App />);
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Port Cleaner" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("本机端口管理工具")).not.toBeInTheDocument();
+    expect(screen.queryByText(/在线.*本机/)).not.toBeInTheDocument();
+  });
+
   it("filters bindings by search, protocol, and access", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -107,6 +117,20 @@ describe("Port Cleaner console", () => {
     expect(screen.queryByText("⌘ K")).not.toBeInTheDocument();
   });
 
+  it("uses consistent custom chrome for filter selects", () => {
+    render(<App />);
+
+    for (const name of ["协议", "权限"]) {
+      const select = screen.getByRole("combobox", { name });
+      const field = select.closest("label");
+      expect(field).toHaveClass("select-field--select");
+      expect(field?.querySelector(".select-chevron")).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+    }
+  });
+
   it("只显示监听端口，并使用中文界面文案", async () => {
     listPortBindingsMock.mockResolvedValue([
       ...bindings,
@@ -129,6 +153,22 @@ describe("Port Cleaner console", () => {
     expect(screen.getAllByText("监听中").length).toBeGreaterThan(0);
     expect(screen.queryByRole("combobox", { name: "状态" })).not.toBeInTheDocument();
     expect(screen.queryByText("Network bindings")).not.toBeInTheDocument();
+  });
+
+  it("moves aggregate statistics into the binding table header", async () => {
+    render(<App />);
+
+    await screen.findByText("node");
+
+    expect(
+      screen.queryByRole("heading", { name: "监听端口概览" }),
+    ).not.toBeInTheDocument();
+    const statistics = screen.getByRole("region", { name: "端口统计" });
+    expect(statistics).toHaveTextContent("显示 2 / 共 2 个");
+    expect(statistics).toHaveTextContent("TCP 1");
+    expect(statistics).toHaveTextContent("UDP 1");
+    expect(statistics).toHaveTextContent("受限 1");
+    expect(statistics).toHaveTextContent(/最近刷新：/);
   });
 
   it("按配置的端口范围显示可结束的监听端口", async () => {
@@ -513,19 +553,23 @@ describe("Port Cleaner console", () => {
     expect(detailsButton).toHaveFocus();
   });
 
-  it("shows visible refresh progress until the latest request settles", async () => {
+  it("shows refresh progress only on the header button", async () => {
     const request = deferred<PortBinding[]>();
     listPortBindingsMock.mockReturnValue(request.promise);
     render(<App />);
 
-    expect(screen.getByText(/正在刷新监听端口/i)).toBeVisible();
+    const refreshButton = screen.getByRole("button", { name: /扫描中/i });
+    expect(refreshButton).toBeDisabled();
+    expect(screen.queryByText(/正在刷新监听端口/i)).not.toBeInTheDocument();
 
     await act(async () => {
       request.resolve(bindings);
       await request.promise;
     });
 
-    expect(screen.queryByText(/正在刷新监听端口/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /立即刷新/i }),
+    ).toBeEnabled();
   });
 
   it("shows a useful error state when bindings cannot be loaded", async () => {

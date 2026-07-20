@@ -41,8 +41,8 @@ export function FilterBar({
           value={query}
         />
       </label>
-      <label className="select-field">
-        <span>协议</span>
+      <label className="select-field select-field--select">
+        <span className="field-label">协议</span>
         <select
           aria-label="协议"
           onChange={(event) =>
@@ -54,9 +54,10 @@ export function FilterBar({
           <option value="tcp">TCP</option>
           <option value="udp">UDP</option>
         </select>
+        <span aria-hidden="true" className="select-chevron" />
       </label>
       <label className="select-field">
-        <span>起始端口</span>
+        <span className="field-label">起始端口</span>
         <input
           aria-label="起始端口"
           inputMode="numeric"
@@ -69,7 +70,7 @@ export function FilterBar({
         />
       </label>
       <label className="select-field">
-        <span>结束端口</span>
+        <span className="field-label">结束端口</span>
         <input
           aria-label="结束端口"
           inputMode="numeric"
@@ -81,8 +82,8 @@ export function FilterBar({
           value={portEnd}
         />
       </label>
-      <label className="select-field">
-        <span>权限</span>
+      <label className="select-field select-field--select">
+        <span className="field-label">权限</span>
         <select
           aria-label="权限"
           onChange={(event) =>
@@ -94,6 +95,7 @@ export function FilterBar({
           <option value="allowed">可操作</option>
           <option value="restricted">受限</option>
         </select>
+        <span aria-hidden="true" className="select-chevron" />
       </label>
     </div>
   );

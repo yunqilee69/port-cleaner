@@ -23,17 +23,10 @@ export function ConsoleHeader({
           <span />
           <span />
         </div>
-        <div>
-          <p className="brand-kicker">本机端口管理工具</p>
-          <h1>Port Cleaner</h1>
-        </div>
+        <h1>Port Cleaner</h1>
       </div>
 
       <div className="header-controls">
-        <div className="system-status" aria-label="系统状态：在线，本机">
-          <span className="status-lamp" aria-hidden="true" />
-          <span><strong>在线</strong> · 本机</span>
-        </div>
         <label className="switch-control">
           <span className="switch-copy">
             <strong>自动刷新</strong>
