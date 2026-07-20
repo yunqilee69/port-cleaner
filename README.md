@@ -13,7 +13,7 @@ Port Cleaner 是一个本地桌面工具，用于查看当前机器上的 TCP/UD
 | Linux | 支持 | `ss`、`ps`、`/proc/<pid>/stat`、`/bin/kill -TERM` |
 | Windows | 支持 | `netstat.exe`、单次 `tasklist.exe /fo csv /nh`、`taskkill.exe /PID <pid> /T /F`、Windows Process API |
 
-实际可见范围取决于当前用户权限、系统工具输出和操作系统安全策略。CI 会在 macOS、Ubuntu 和 Windows 上编译并运行 Rust 测试，但真实端口发现和真实进程终止仍需在各平台人工验证。
+实际可见范围取决于当前用户权限、系统工具输出和操作系统安全策略。发布前应在 macOS、Ubuntu 和 Windows 上完成编译与测试，但真实端口发现和真实进程终止仍需在各平台人工验证。
 
 ## 功能
 
@@ -127,4 +127,4 @@ Tauri 只能为当前宿主平台构建对应格式；例如 DMG 只能在 macOS
 
 ## 验证
 
-CI 不启动真实监听器，也不执行真实进程终止。Rust 终止测试使用替身 terminator 验证调用顺序和安全条件；真实行为应按人工清单在隔离的测试进程上验证，切勿选择重要服务或未保存工作的应用。
+自动化测试不启动真实监听器，也不执行真实进程终止。Rust 终止测试使用替身 terminator 验证调用顺序和安全条件；真实行为应按人工清单在隔离的测试进程上验证，切勿选择重要服务或未保存工作的应用。

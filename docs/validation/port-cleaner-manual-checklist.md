@@ -65,4 +65,4 @@ npm test -- src/App.test.tsx -t "disables termination when ownership is restrict
 - Linux：确认当前发行版生成的 AppImage、deb 或 rpm（以 Tauri 实际输出为准）可启动，并具备 `ss`/`ps` 运行依赖。
 - Windows：确认 NSIS/MSI（以 Tauri 实际输出为准）可安装和启动；代码签名不在当前 MVP 自动化范围内。
 
-CI 和单元测试不得执行真实终止；真实终止仅限上述人工测试进程。
+自动化测试不得执行真实终止；真实终止仅限上述人工测试进程。
